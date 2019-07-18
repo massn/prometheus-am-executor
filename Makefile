@@ -12,7 +12,7 @@ deps: env
 	go get
 
 build: deps
-	go build -o prometheus-am-executor
+	GOOS=linux GOARCH=amd64 go build -o test-prometheus-am-executor
 
 test: build
 	go test

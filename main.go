@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -15,11 +14,14 @@ import (
 	"github.com/prometheus/alertmanager/template"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/sirupsen/logrus"
 )
 
 var (
-	listenAddr      = flag.String("l", ":8080", "HTTP Port to listen on")
+	listenAddr      = flag.String("p", ":8080", "HTTP Port to listen on")
 	verbose         = flag.Bool("v", false, "Enable verbose/debug logging")
+	logDir          = flag.String("l", "log", "Log directory")
 	processDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "am_executor",
 		Subsystem: "process",
@@ -46,13 +48,15 @@ var (
 )
 
 func handleError(w http.ResponseWriter, err error) {
+	setLogPath()
 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	log.Println(err)
+	log.Error(err)
 }
 
 func handleWebhook(w http.ResponseWriter, req *http.Request) {
+	setLogPath()
 	if *verbose {
-		log.Println("Webhook triggered")
+		log.Debug("Webhook triggered")
 	}
 	data, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -61,15 +65,21 @@ func handleWebhook(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if *verbose {
-		log.Println("Body:", string(data))
+		log.WithFields(
+			logrus.Fields{
+				"body": string(data),
+			}).Debug("got data")
 	}
 	payload := &template.Data{}
-	if err := json.Unmarshal(data, payload); err != nil {
+	if err := json.Unmarshal(data, &payload); err != nil {
 		handleError(w, err)
 		errCounter.WithLabelValues("unmarshal")
 	}
 	if *verbose {
-		log.Printf("Got: %#v", payload)
+		log.WithFields(
+			logrus.Fields{
+				"body": fmt.Sprintf("%+v", payload),
+			}).Info("got payload")
 	}
 	if err := rnr.run(amDataToEnv(payload)); err != nil {
 		handleError(w, err)
@@ -84,7 +94,8 @@ func handleHealth(w http.ResponseWriter, req *http.Request) {
 type logWriter struct{}
 
 func (lw *logWriter) Write(p []byte) (n int, err error) {
-	log.Print(string(p))
+	setLogPath()
+	log.Debug(string(p))
 	return len(p), nil
 }
 
@@ -149,7 +160,28 @@ func amDataToEnv(td *template.Data) []string {
 	return env
 }
 
+var log = logrus.New()
+
+func setLogPath() {
+	date := time.Now().Format("20060102")
+	logPath := *logDir + "/prometheus-am-executor." + date + ".log"
+	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err == nil {
+		log.Out = file
+	} else {
+		log.Error("Failed to log to " + logPath)
+		os.Exit(1)
+	}
+}
+
+func init() {
+	log.SetFormatter(&logrus.TextFormatter{
+		DisableColors: true,
+	})
+}
+
 func main() {
+	setLogPath()
 	prometheus.MustRegister(processDuration)
 	prometheus.MustRegister(processesCurrent)
 	prometheus.MustRegister(errCounter)
@@ -171,6 +203,6 @@ func main() {
 	http.HandleFunc("/", handleWebhook)
 	http.HandleFunc("/_health", handleHealth)
 	http.Handle("/metrics", promhttp.Handler())
-	log.Println("Listening on", *listenAddr, "and running", command)
+	log.Debug("Listening on", *listenAddr, "and running", command)
 	log.Fatal(http.ListenAndServe(*listenAddr, nil))
 }
