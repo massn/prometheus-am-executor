@@ -181,7 +181,6 @@ func init() {
 }
 
 func main() {
-	setLogPath()
 	prometheus.MustRegister(processDuration)
 	prometheus.MustRegister(processesCurrent)
 	prometheus.MustRegister(errCounter)
@@ -190,6 +189,7 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+	setLogPath()
 	command := flag.Args()
 	if len(command) == 0 {
 		log.Fatal("Require command")

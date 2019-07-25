@@ -9,6 +9,7 @@ require (
 	github.com/k0kubun/pp v3.0.1+incompatible
 	github.com/prometheus/alertmanager v0.18.0
 	github.com/prometheus/client_golang v1.0.0
+	github.com/sevlyar/go-daemon v0.1.5
 	github.com/sirupsen/logrus v1.2.0
 	gopkg.in/mgo.v2 v2.0.0-20180705113604-9856a29383ce // indirect
 )
