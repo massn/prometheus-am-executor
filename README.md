@@ -11,8 +11,10 @@ executes a given command with alert details set as environment variables.
 ```
 Usage: ./prometheus-am-executor [options] script [args..]
 
-  -l string
+  -p string
     	HTTP Port to listen on (default ":8080")
+  -l string
+    	Log directory
   -v	Enable verbose/debug logging
 ```
 
